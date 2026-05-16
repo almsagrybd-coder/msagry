@@ -47,7 +47,7 @@ if user_question := st.chat_input("اكتب سؤالك هنا..."):
         with st.spinner("جاري التفكير..."):
             try:
                 response = client.models.generate_content(
-                model="gemini-1.5-pro",
+               model="gemini-2.0-flash",
                     contents=formatted_contents,
                     config=types.GenerateContentConfig(
                         system_instruction="أنت 'شات المصاقري'، مساعد ذكي ومطور برمجيات محترف. نحن الآن في عام 2026، إجاباتك دقيقة ومحدثة وتخاطب أصدقاء المطور عبد الرحمن المصاقري بكل ود واحترام."
