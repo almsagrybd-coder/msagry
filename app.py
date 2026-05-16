@@ -7,13 +7,13 @@ st.set_page_config(page_title="شات المصاقري", page_icon="🤖")
 st.title("🤖 شات المصاقري الذكي")
 st.write("مرحباً بك! اسألني عن أي شيء وسأجيبك فوراً.")
 
-# مفتاح الأمان المباشر للتجربة المحلية
-API_KEY = "AIzaSyC7P2NrHsRb4A3MJS13ZNWbp6k3cGtZ9dQ"
+# قراءة مفتاح الأمان من الـ Secrets الخاصة بسيرفر Streamlit
+API_KEY = st.secrets["GEMINI_API_KEY"]
 
-# إنشاء اتصال نشط مع السيرفر في كل لقطة تحديث
+# إنشاء اتصال نشط مع السيرفر
 client = genai.Client(api_key=API_KEY)
 
-# إنشاء قائمة لتخزين وعرض تاريخ المحادثة على الشاشة
+# إنشاء قائمة لتخزين وعرض تاريخ المحادثة في الذاكرة
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -29,25 +29,32 @@ if user_question := st.chat_input("اكتب سؤالك هنا..."):
         st.markdown(user_question)
     st.session_state.messages.append({"role": "user", "text": user_question})
 
-    # 2. بناء هيكل المحادثة بالكامل (التاريخ + السؤال الحالي) في قائمة واحدة
+    # 2. تحويل التاريخ إلى الهيكل المطلوب لـ Gemini مع معالجة الرسائل المتتالية
     formatted_contents = []
     for msg in st.session_state.messages:
         role_label = "user" if msg["role"] == "user" else "model"
-        formatted_contents.append(
-            types.Content(role=role_label, parts=[types.Part.from_text(text=msg["text"])])
-        )
+        
+        # إذا كانت الرسالة السابقة من نفس الشخص، ندمج النصين معاً لتجنب خطأ التناوب
+        if formatted_contents and formatted_contents[-1].role == role_label:
+            formatted_contents[-1].parts[0].text += f"\n{msg['text']}"
+        else:
+            formatted_contents.append(
+                types.Content(role=role_label, parts=[types.Part.from_text(text=msg["text"])])
+            )
 
     # 3. إرسال المحادثة بالكامل دفعة واحدة بطريقة مضمونة ومستقرة
     with st.chat_message("assistant"):
         with st.spinner("جاري التفكير..."):
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=formatted_contents, # تمرير كامل السياق هنا ليحفظ الذاكرة
-                config=types.GenerateContentConfig(
-                    system_instruction="أنت 'شات المصاقري'، مساعد ذكي ومطور برمجيات محترف. نحن الآن في عام 2026، إجاباتك دقيقة ومحدثة وتخاطب أصدقاء المطور عبد الرحمن المصاقري بكل ود واحترام."
+            try:
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=formatted_contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction="أنت 'شات المصاقري'، مساعد ذكي ومطور برمجيات محترف. نحن الآن في عام 2026، إجاباتك دقيقة ومحدثة وتخاطب أصدقاء المطور عبد الرحمن المصاقري بكل ود واحترام."
+                    )
                 )
-            )
-            st.markdown(response.text)
-    
-    # 4. حفظ إجابة البوت في الذاكرة ليراها المستخدم في المرة القادمة
-    st.session_state.messages.append({"role": "assistant", "text": response.text})
+                st.markdown(response.text)
+                # 4. حفظ إجابة البوت في الذاكرة فقط لو نجحت العملية
+                st.session_state.messages.append({"role": "assistant", "text": response.text})
+            except Exception as e:
+                st.error(f"حدث خطأ أثناء الاتصال بالخادم: {e}")
